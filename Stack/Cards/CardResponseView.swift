@@ -3,7 +3,7 @@ import SwiftUI
 struct CardResponseView: View {
     @Binding var responseText: String
     @State private var isStreaming: Bool = false
-    @State private var showCopyFeedback: Bool = false
+    var onDelete: (() -> Void)?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -17,26 +17,15 @@ struct CardResponseView: View {
                 
                 Spacer()
                 
-                // Copy button
+                // Delete button
                 Button(action: {
-                    copyToClipboard()
+                    onDelete?()
                 }) {
-                    Image(systemName: showCopyFeedback ? "checkmark.circle.fill" : "doc.on.clipboard")
-                        .font(.system(size: 14))
-                        .foregroundStyle(showCopyFeedback ? .green : .secondary)
+                    Image(systemName: "minus.circle.fill")
+                        .font(.title2)
                 }
                 .buttonStyle(.plain)
                 .disabled(responseText.isEmpty)
-                
-                // Status indicator
-                if isStreaming {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Image(systemName: "arrow.right.circle")
-                        .font(.system(size: 16))
-                        .foregroundStyle(.orange)
-                }
             }
             
             // Response content
@@ -69,7 +58,7 @@ struct CardResponseView: View {
             }
         }
         .padding(16)
-        .frame(width: 260, height: 200)
+        .frame(width: 260, height: 180)
         .background(Color.orange)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
@@ -77,28 +66,12 @@ struct CardResponseView: View {
                 .strokeBorder(Color.blue.opacity(0.1), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.06), radius: 24, x: 0, y: 3)
-        .onChange(of: showCopyFeedback) { _, newValue in
-            if newValue {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    showCopyFeedback = false
-                }
-            }
-        }
     }
     
     func setStreaming(_ streaming: Bool) {
         isStreaming = streaming
     }
     
-    private func copyToClipboard() {
-        #if os(macOS)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(responseText, forType: .string)
-        #else
-        UIPasteboard.general.string = responseText
-        #endif
-        showCopyFeedback = true
-    }
     
     private func wordCount(_ text: String) -> Int {
         let words = text.components(separatedBy: .whitespacesAndNewlines)
@@ -108,11 +81,20 @@ struct CardResponseView: View {
 
 #Preview {
     VStack(spacing: 20) {
-        CardResponseView(responseText: .constant("This is a sample response from the LLM. It contains multiple sentences to demonstrate how the response card displays longer content with proper scrolling and formatting."))
+        CardResponseView(
+            responseText: .constant("This is a sample response from the LLM. It contains multiple sentences to demonstrate how the response card displays longer content with proper scrolling and formatting."),
+            onDelete: { print("Delete tapped") }
+        )
         
-        CardResponseView(responseText: .constant(""))
+        CardResponseView(
+            responseText: .constant(""),
+            onDelete: { print("Delete tapped") }
+        )
         
-        CardResponseView(responseText: .constant("Short response"))
+        CardResponseView(
+            responseText: .constant("Short response"),
+            onDelete: { print("Delete tapped") }
+        )
     }
     .padding()
     .frame(maxWidth: .infinity, maxHeight: .infinity)

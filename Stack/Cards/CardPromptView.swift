@@ -2,9 +2,6 @@ import SwiftUI
 
 struct CardPromptView: View {
     @Binding var promptText: String
-    @State private var isMuted: Bool = false
-    @State private var hasVariation: Bool = false
-    @State private var variationText: String = ""
     
     var onAddToSequence: (() -> Void)?
     
@@ -19,20 +16,6 @@ struct CardPromptView: View {
                     .fontWeight(.heavy)
                 
                 Spacer()
-                
-                // Mute button
-                Button(action: {
-                    isMuted.toggle()
-                }) {
-                    Image(systemName: isMuted ? "eye.slash.fill" : "eye.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(isMuted ? .red : .secondary)
-                }
-                .buttonStyle(.plain)
-                
-                // Variation button
-                Image(systemName: "xmark.circle.fill")
-                .buttonStyle(.plain)
             }
             
             // Main content
@@ -45,13 +28,12 @@ struct CardPromptView: View {
                         .foregroundStyle(.secondary)
                         .scrollContentBackground(.hidden)
                         .background(Color.clear)
-                        .opacity(isMuted ? 0.5 : 1.0)
                         .onChange(of: promptText) { _, newValue in
                             print("🔄 Prompt text changed to: '\(newValue)'")
                         }
                     
                     // Placeholder text
-                    if promptText.isEmpty && !isMuted {
+                    if promptText.isEmpty {
                         Text("Enter your prompt here...")
                             .font(.body)
                             .fontDesign(.monospaced)
@@ -61,35 +43,7 @@ struct CardPromptView: View {
                             .allowsHitTesting(false)
                     }
                 }
-                .overlay(
-                    Group {
-                        if isMuted {
-                            Text("MUTED")
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                                .padding(4)
-                                .background(.red.opacity(0.1))
-                                .cornerRadius(4)
-                        }
-                    },
-                    alignment: .topTrailing
-                )
                 
-                // Variation text (if enabled)
-                if hasVariation {
-                    Divider()
-                    
-                    Text("Variation:")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    TextEditor(text: $variationText)
-                        .foregroundStyle(.secondary)
-                        .scrollContentBackground(.hidden)
-                        .background(Color.blue.opacity(0.05))
-                        .frame(minHeight: 60)
-                }
             }
         }
         .padding(16)

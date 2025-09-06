@@ -28,14 +28,32 @@ struct ContentView: View {
             
             // Canvas with stacks
             GeometryReader { geometry in
-                ForEach($coordinator.stacks) { $stack in
-                    CardStackView(coordinator: coordinator, stack: $stack)
+                ZStack {
+                    // Invisible background for tap detection
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { location in
+                            // Collapse all spread-out stacks when tapping on background
+                            coordinator.collapseAllStacks(screenSize: geometry.size)
+                        }
+                    
+                    // Stack views
+                    ForEach($coordinator.stacks) { $stack in
+                        CardStackView(coordinator: coordinator, stack: $stack)
+                    }
                 }
                 .scaleEffect(effectiveScale)
                 .offset(CGSize(
-                    width: effectivePan.width + geometry.size.width / 2,
-                    height: effectivePan.height + geometry.size.height / 2
+                    width: effectivePan.width,
+                    height: effectivePan.height
                 ))
+                .onAppear {
+                    // Store geometry size for use in buttons
+                    coordinator.currentScreenSize = geometry.size
+                }
+                .onChange(of: geometry.size) { newSize in
+                    coordinator.currentScreenSize = newSize
+                }
             }
             .gesture(canvasPanGesture)
             .simultaneousGesture(canvasMagnificationGesture)
@@ -46,45 +64,28 @@ struct ContentView: View {
                 HStack {
                     Spacer()
                     
-                    // Generate All button
-                    if coordinator.stacks.count > 1 {
-                        Button(action: {
-                            Task {
-                                await coordinator.generateAllStacks()
-                            }
-                        }) {
-                            HStack(spacing: 6) {
-                                if coordinator.isGeneratingAll {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                }
-                                Text("Generate All")
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(.regularMaterial)
-                            .cornerRadius(20)
+                    // Reset button
+                    Button(action: {
+                        coordinator.resetToInitialState(screenSize: coordinator.currentScreenSize)
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.clockwise.circle.fill")
+                            Text("Reset")
                         }
-                        .buttonStyle(.plain)
-                        .disabled(coordinator.isGeneratingAll)
-                        .padding(.top)
-                        .padding(.trailing)
+                        .font(.system(size: 16, weight: .medium))
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(.regularMaterial)
+                        .cornerRadius(25)
                     }
-                }
-                
-                Spacer()
-                
-                // Bottom controls
-                HStack {
-                    Spacer()
+                    .buttonStyle(.plain)
+                    .padding(.top)
+                    .padding(.trailing, 10)
                     
                     // Add new stack button
                     Button(action: {
-                        let newPosition = CGPoint(
-                            x: CGFloat.random(in: -200...200),
-                            y: CGFloat.random(in: -200...200)
-                        )
-                        coordinator.addNewStack(at: newPosition)
+                        // Add new stack at center of screen
+                        coordinator.addNewStack(at: CGPoint(x: 0, y: 0))
                     }) {
                         HStack(spacing: 6) {
                             Image(systemName: "plus.circle.fill")
@@ -97,8 +98,42 @@ struct ContentView: View {
                         .cornerRadius(25)
                     }
                     .buttonStyle(.plain)
-                    .padding(.bottom)
+                    .padding(.top)
                     .padding(.trailing)
+                }
+                
+                Spacer()
+                
+                // Bottom controls
+                HStack {
+                    Spacer()
+                    
+                    // Play button
+                    Button(action: {
+                        Task {
+                            await coordinator.generateAllStacks()
+                        }
+                    }) {
+                        HStack(spacing: 6) {
+                            if coordinator.isGeneratingAll {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "play.circle.fill")
+                            }
+                            Text(coordinator.isGeneratingAll ? coordinator.formatElapsedTime() : "Play")
+                        }
+                        .font(.system(size: 16, weight: .medium))
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(.regularMaterial)
+                        .cornerRadius(25)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(coordinator.isGeneratingAll)
+                    .padding(.bottom)
+                    
+                    Spacer()
                 }
             }
         }

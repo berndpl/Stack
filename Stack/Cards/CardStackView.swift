@@ -5,17 +5,46 @@ struct CardStackView: View {
     @Binding var stack: CardStack
     
     @State private var dragOffset: CGSize = .zero
+    @State private var screenSize: CGSize = .zero
     
     var body: some View {
-        ZStack {
-            // Render each card at its absolute position
-            ForEach(stack.cards, id: \.id) { card in
-                cardView(for: card)
-                    .position(card.position)
-                    .zIndex(card.isDragging ? 999 : 1)
+        GeometryReader { geometry in
+            ZStack {
+                // Render each card at its absolute position
+                ForEach(stack.cards, id: \.id) { card in
+                    cardView(for: card)
+                        .position(card.position)
+                        .zIndex(card.isDragging ? 999 : 1)
                     .onTapGesture {
+                        // Spread out the stack when tapping on a card
+                        if !stack.isSpreadOut {
+                            coordinator.toggleStackSpread(for: stack.id, screenSize: screenSize)
+                        }
                         toggleCardExpansion(cardId: card.id)
                     }
+                }
+            }
+            .onAppear {
+                screenSize = geometry.size
+                coordinator.updateCardPositions(in: stack.id, screenSize: screenSize)
+                
+                // Stop initial appearance animation after it completes
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    for card in stack.cards {
+                        if card.isInitialAppearance {
+                            var updatedCard = card
+                            updatedCard.isInitialAppearance = false
+                            coordinator.updateCard(updatedCard, in: stack.id)
+                        }
+                    }
+                }
+            }
+            .onChange(of: geometry.size) { newSize in
+                screenSize = newSize
+                coordinator.updateCardPositions(in: stack.id, screenSize: screenSize)
+            }
+            .onChange(of: stack.cards.count) { _ in
+                coordinator.updateCardPositions(in: stack.id, screenSize: screenSize)
             }
         }
     }
@@ -63,19 +92,6 @@ struct CardStackView: View {
                         coordinator.updateCard(updatedCard, in: stack.id)
                     }
                 ),
-                isBusy: Binding(
-                    get: { card.isBusy },
-                    set: { newValue in
-                        var updatedCard = card
-                        updatedCard.isBusy = newValue
-                        coordinator.updateCard(updatedCard, in: stack.id)
-                    }
-                ),
-                onGenerate: {
-                    Task {
-                        await coordinator.generateResponse(for: stack.id)
-                    }
-                },
                 compiledPrompt: coordinator.compilePrompts(for: stack.id)
             )
             .scaleEffect(card.isDragging ? 1.05 : 1.0)
@@ -91,10 +107,21 @@ struct CardStackView: View {
                         updatedCard.responseText = newValue
                         coordinator.updateCard(updatedCard, in: stack.id)
                     }
-                )
+                ),
+                onDelete: {
+                    coordinator.removeCard(withId: card.id, from: stack.id)
+                }
             )
             .scaleEffect(card.isDragging ? 1.05 : 1.0)
+            .opacity(card.isAnimatingOut ? 0.0 : (card.isAnimatingIn ? 0.0 : 1.0))
+            .offset(y: card.isAnimatingIn ? 100 : (card.isInitialAppearance ? getInitialAnimationOffset(for: card, screenSize: screenSize) : 0)) // Animate from bottom for response, from top center for initial
+            .rotationEffect(.degrees(stack.isSpreadOut ? 0 : getStackRotation(for: card)))
             .shadow(radius: card.isDragging ? 10 : 4)
+            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: card.isAnimatingIn)
+            .animation(.easeInOut(duration: 0.3), value: card.isAnimatingOut)
+            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: card.position)
+            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: stack.isSpreadOut)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: card.isInitialAppearance)
             .gesture(cardDragGesture(for: card))
         }
     }
@@ -102,6 +129,11 @@ struct CardStackView: View {
     private func cardDragGesture(for card: Card) -> some Gesture {
         DragGesture()
             .onChanged { value in
+                // Spread out the stack when starting to drag
+                if !stack.isSpreadOut {
+                    coordinator.toggleStackSpread(for: stack.id, screenSize: screenSize)
+                }
+                
                 coordinator.setCardDragging(card.id, dragging: true, in: stack.id)
                 let newPosition = CGPoint(
                     x: card.position.x + value.translation.width,
@@ -111,6 +143,8 @@ struct CardStackView: View {
             }
             .onEnded { _ in
                 coordinator.setCardDragging(card.id, dragging: false, in: stack.id)
+                // Snap back to position (animation is handled in snapCardToPosition)
+                coordinator.snapCardToPosition(card.id, in: stack.id, screenSize: screenSize)
             }
     }
     
@@ -120,6 +154,33 @@ struct CardStackView: View {
         var updatedCard = stack.cards[cardIndex]
         updatedCard.isExpanded.toggle()
         coordinator.updateCard(updatedCard, in: stack.id)
+    }
+    
+    private func getStackRotation(for card: Card) -> Double {
+        guard let cardIndex = stack.cards.firstIndex(where: { $0.id == card.id }) else { return 0 }
+        
+        // Create a slight rotation for each card in the stack
+        // Base rotation with some randomness for natural look
+        let baseRotation = Double(cardIndex) * 2.0 // 2 degrees per card
+        let randomOffset = Double(cardIndex) * 0.5 // Small random offset
+        
+        // Alternate the direction slightly for more natural look
+        let direction = cardIndex % 2 == 0 ? 1.0 : -1.0
+        
+        return (baseRotation + randomOffset) * direction
+    }
+    
+    private func getInitialAnimationOffset(for card: Card, screenSize: CGSize) -> CGFloat {
+        // Calculate offset from screen top center to card's final position
+        // This ensures cards animate from the true top center of the screen
+        let screenTopCenter = CGPoint(x: screenSize.width / 2, y: 0)
+        let cardFinalPosition = card.position
+        
+        // Calculate the distance from screen top center to card's final position
+        let offsetY = cardFinalPosition.y - screenTopCenter.y
+        
+        // Add a small additional offset to start slightly above the screen top
+        return offsetY - 50
     }
 }
 
