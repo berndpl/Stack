@@ -55,7 +55,7 @@ struct CardStackView: View {
         case .prompt:
             CardPromptView(
                 promptText: Binding(
-                    get: { 
+                    get: {
                         let text = card.promptText ?? ""
                         print("📖 Getting prompt text: '\(text)'")
                         return text
@@ -66,12 +66,23 @@ struct CardStackView: View {
                         updatedCard.promptText = newValue
                         coordinator.updateCard(updatedCard, in: stack.id)
                     }
-                )
-            ) {
-                coordinator.addPromptCard(to: stack.id)
-            }
+                ),
+                colorIndex: card.colorIndex,
+                totalPromptCards: getTotalPromptCards(),
+                onAddToSequence: {
+                    coordinator.addPromptCard(to: stack.id)
+                },
+                onAddPrompt: {
+                    coordinator.addPromptCard(to: stack.id)
+                },
+                onRemovePrompt: {
+                    coordinator.removeCard(withId: card.id, from: stack.id)
+                }
+            )
             .scaleEffect(card.isDragging ? 1.05 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: card.isDragging)
             .shadow(radius: card.isDragging ? 10 : 4)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: card.isDragging)
             .gesture(cardDragGesture(for: card))
             
         case .llm:
@@ -95,7 +106,9 @@ struct CardStackView: View {
                 compiledPrompt: coordinator.compilePrompts(for: stack.id)
             )
             .scaleEffect(card.isDragging ? 1.05 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: card.isDragging)
             .shadow(radius: card.isDragging ? 10 : 4)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: card.isDragging)
             .gesture(cardDragGesture(for: card))
             
         case .response:
@@ -108,15 +121,18 @@ struct CardStackView: View {
                         coordinator.updateCard(updatedCard, in: stack.id)
                     }
                 ),
+                generationTime: card.generationTime,
                 onDelete: {
                     coordinator.removeCard(withId: card.id, from: stack.id)
                 }
             )
             .scaleEffect(card.isDragging ? 1.05 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: card.isDragging)
             .opacity(card.isAnimatingOut ? 0.0 : (card.isAnimatingIn ? 0.0 : 1.0))
             .offset(y: card.isAnimatingIn ? 100 : (card.isInitialAppearance ? getInitialAnimationOffset(for: card, screenSize: screenSize) : 0)) // Animate from bottom for response, from top center for initial
             .rotationEffect(.degrees(stack.isSpreadOut ? 0 : getStackRotation(for: card)))
             .shadow(radius: card.isDragging ? 10 : 4)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: card.isDragging)
             .animation(.spring(response: 0.6, dampingFraction: 0.8), value: card.isAnimatingIn)
             .animation(.easeInOut(duration: 0.3), value: card.isAnimatingOut)
             .animation(.spring(response: 0.6, dampingFraction: 0.8), value: card.position)
@@ -141,11 +157,96 @@ struct CardStackView: View {
                 )
                 coordinator.updateCardPosition(card.id, to: newPosition, in: stack.id)
             }
-            .onEnded { _ in
+            .onEnded { value in
                 coordinator.setCardDragging(card.id, dragging: false, in: stack.id)
-                // Snap back to position (animation is handled in snapCardToPosition)
-                coordinator.snapCardToPosition(card.id, in: stack.id, screenSize: screenSize)
+                
+                // Check if we need to reorder cards
+                let originalPosition = getOriginalCardPosition(for: card)
+                let displacement = sqrt(pow(card.position.x - originalPosition.x, 2) + pow(card.position.y - originalPosition.y, 2))
+                let reorderThreshold: CGFloat = 100 // Minimum displacement to trigger reordering
+                
+                if displacement > reorderThreshold, let targetCard = findCardAtPosition(card.position, excluding: card.id) {
+                    reorderCard(card, to: targetCard)
+                } else {
+                    // Always snap back to center position
+                    coordinator.snapStackToCenter(stackId: stack.id, screenSize: screenSize)
+                }
             }
+    }
+    
+    private func findCardAtPosition(_ position: CGPoint, excluding excludedId: UUID) -> Card? {
+        // Find the card at the given position, excluding the dragged card
+        for card in stack.cards {
+            if card.id != excludedId {
+                let cardRect = CGRect(
+                    x: card.position.x - 130, // Half card width
+                    y: card.position.y - 90,  // Half card height
+                    width: 260,
+                    height: 180
+                )
+                if cardRect.contains(position) {
+                    return card
+                }
+            }
+        }
+        return nil
+    }
+    
+    private func reorderCard(_ draggedCard: Card, to targetCard: Card) {
+        guard let draggedIndex = stack.cards.firstIndex(where: { $0.id == draggedCard.id }),
+              let targetIndex = stack.cards.firstIndex(where: { $0.id == targetCard.id }) else { return }
+        
+        // Reorder the cards
+        coordinator.reorderCards(from: draggedIndex, to: targetIndex, in: stack.id)
+    }
+    
+    private func getTotalPromptCards() -> Int {
+        // Get the total number of prompt cards in the stack
+        return stack.cards.filter { $0.type == .prompt }.count
+    }
+    
+    private func getOriginalCardPosition(for card: Card) -> CGPoint {
+        // Calculate where this card should be in its original position
+        guard let cardIndex = stack.cards.firstIndex(where: { $0.id == card.id }) else {
+            return card.position
+        }
+        
+        let centerX = screenSize.width / 2
+        let centerY = screenSize.height / 2
+        let cardSpacing: CGFloat = 20
+        let cardHeight: CGFloat = 180
+        let stackOffset: CGFloat = 8
+        
+        // Add safe area padding
+        let safeAreaTop: CGFloat = 120
+        let safeAreaBottom: CGFloat = 180
+        let safeAreaLeft: CGFloat = 20
+        let safeAreaRight: CGFloat = 20
+        
+        let availableHeight = screenSize.height - safeAreaTop - safeAreaBottom
+        let availableWidth = screenSize.width - safeAreaLeft - safeAreaRight
+        let adjustedCenterY = safeAreaTop + availableHeight / 2
+        let adjustedCenterX = safeAreaLeft + availableWidth / 2
+        
+        if stack.isSpreadOut {
+            // Spread out state - vertical line position
+            let totalCards = stack.cards.count
+            let totalHeight = CGFloat(totalCards) * cardHeight + CGFloat(totalCards - 1) * cardSpacing
+            
+            let maxAllowedHeight = availableHeight * 0.85
+            let actualSpacing = totalHeight > maxAllowedHeight ? 
+                max(5, (maxAllowedHeight - CGFloat(totalCards) * cardHeight) / CGFloat(max(1, totalCards - 1))) : 
+                cardSpacing
+            
+            let groupStartY = adjustedCenterY - totalHeight / 2 + cardHeight / 2
+            let targetY = groupStartY + CGFloat(cardIndex) * (cardHeight + actualSpacing)
+            return CGPoint(x: adjustedCenterX, y: targetY)
+        } else {
+            // Stacked state
+            let offsetX = CGFloat(cardIndex) * stackOffset
+            let offsetY = CGFloat(cardIndex) * stackOffset
+            return CGPoint(x: adjustedCenterX + offsetX, y: adjustedCenterY + offsetY)
+        }
     }
     
     private func toggleCardExpansion(cardId: UUID) {

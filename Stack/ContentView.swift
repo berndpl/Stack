@@ -8,8 +8,14 @@ struct ContentView: View {
     // For gesture state
     @State private var accumulatedPan: CGSize = .zero
     @State private var transientPan: CGSize = .zero
-    @State private var accumulatedScale: CGFloat = 1.0
+    @State private var accumulatedScale: CGFloat = 0.8  // Start at initial zoom level
     @State private var transientScale: CGFloat = 1.0
+    
+    // Zoom limits
+    private let minZoom: CGFloat = 0.5  // 50% - prevents interface from becoming too small
+    private let maxZoom: CGFloat = 2.0  // 200% - prevents interface from becoming too large
+    private let defaultZoom: CGFloat = 1.0  // 100% - default zoom level for expanded stacks
+    private let initialZoom: CGFloat = 0.8  // 80% - initial zoom level for overview
     
     private var effectivePan: CGSize {
         CGSize(width: accumulatedPan.width + transientPan.width,
@@ -17,7 +23,7 @@ struct ContentView: View {
     }
     
     private var effectiveScale: CGFloat { 
-        max(0.2, min(3.0, accumulatedScale * transientScale)) 
+        max(minZoom, min(maxZoom, accumulatedScale * transientScale)) 
     }
     
     var body: some View {
@@ -35,6 +41,9 @@ struct ContentView: View {
                         .onTapGesture { location in
                             // Collapse all spread-out stacks when tapping on background
                             coordinator.collapseAllStacks(screenSize: geometry.size)
+                            
+                            // Also zoom back out to initial level
+                            zoomToInitialLevel()
                         }
                     
                     // Stack views
@@ -143,6 +152,13 @@ struct ContentView: View {
             accumulatedPan = .zero
             transientPan = .zero
         }
+        .onChange(of: coordinator.stacks) { stacks in
+            // Check if any stack is spread out and zoom to default level
+            let hasSpreadOutStack = stacks.contains { $0.isSpreadOut }
+            if hasSpreadOutStack && effectiveScale < defaultZoom {
+                zoomToDefaultLevel()
+            }
+        }
     }
     
     // MARK: - Gestures
@@ -156,6 +172,11 @@ struct ContentView: View {
                 accumulatedPan.width += value.translation.width
                 accumulatedPan.height += value.translation.height
                 transientPan = .zero
+                
+                // Snap canvas back to center
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                    accumulatedPan = .zero
+                }
             }
     }
     
@@ -165,9 +186,23 @@ struct ContentView: View {
                 transientScale = value
             }
             .onEnded { value in
-                accumulatedScale = max(0.2, min(3.0, accumulatedScale * value))
+                accumulatedScale = max(minZoom, min(maxZoom, accumulatedScale * value))
                 transientScale = 1.0
             }
+    }
+    
+    // MARK: - Helper Functions
+    
+    private func zoomToDefaultLevel() {
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+            accumulatedScale = defaultZoom
+        }
+    }
+    
+    private func zoomToInitialLevel() {
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+            accumulatedScale = initialZoom
+        }
     }
 }
 
