@@ -2,20 +2,63 @@
 
 An app for iPad and macOS
 
-A 2D canvas to help explore and evaluate different prompts and how they affect the reponse of a LLM model.
-What is the impact of the instruction, the context, the personal information provided?
+A 2D canvas to help explore and evaluate differently composed prompts LLM model chains and how they affect the reponse.
 
-Canvas
-The default view is a 2D canvas you can pan around, zoom in an out with your fingers
-There is a plus button to add boxes of different types… 
+Default set up
+- PromptCard
+- LLMCard (Ollama)
 
-* Prompts. A textview with a prompt
-* LLM. A interface for the LLM, to connect with a local model via Ollama there is a field for the address a textfield for the model choice
-* Response. A text view with a reponse
+Story: Run Prompt
+- Tap generate on LLMCard to run prompt
+- 
 
-Connections
+How it works
 
-* By default all three boxes connect.
-* Connections are represented by a wire
+A prompt is composed by multiple pieces of text, each placed in it's own PromptCard. Each card is automatically connected and put into sequence. The conent is combined and submitted to the LLMCard
 
+I can add multiple PromptCards to section the prompt.
+
+I can also quickly mute a PromptCard to remove it from the compiled prompt without deleting the content. This helps me to quickly A/B test.
+
+I can also add a PrompCard Variation to each PrompCard. Will cause the Stack run separatly for a testing the impact of this PromptCard
+
+Card Behaviour
+
+Cards appear as a stack. Each card has a slight offset so you can see its header. 
+
+You can tap the card header to expand the stack so you can see and edit its content
+
+Interface
+
+PrompCard
+- Mute button
+- Variation button
+- Textview
+- Add to sequence button
+
+LLMCard
+- OllamaCard: 
+    - Exandable Input preview
+    - Textfield for URL of local Ollama address, 
+    - Textfield with string of model to use
+    - Generate button
   
+Top Level
+- Primary action is a Play button to run a stack 
+
+---
+
+
+
+---
+
+Setup
+
+Let's make things a bit modular
+
+- Separate View with Previews for
+CardLLMView
+CardPromptView
+CardResponseView
+
+- A CardCoordinator where used cards and their the sequence is managed and stored
