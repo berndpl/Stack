@@ -4,6 +4,9 @@ struct CardStackView: View {
     @ObservedObject var coordinator: CardCoordinator
     @Binding var stack: CardStack
     
+    @FocusState.Binding var isTextFieldFocused: Bool
+    var onTextEntryBegin: ((CGPoint) -> Void)?
+    
     @State private var dragOffset: CGSize = .zero
     @State private var screenSize: CGSize = .zero
     
@@ -77,6 +80,10 @@ struct CardStackView: View {
                 },
                 onRemovePrompt: {
                     coordinator.removeCard(withId: card.id, from: stack.id)
+                },
+                isTextFieldFocused: $isTextFieldFocused,
+                onTextEntryBegin: {
+                    onTextEntryBegin?(card.position)
                 }
             )
             .scaleEffect(card.isDragging ? 1.05 : 1.0)
@@ -103,7 +110,11 @@ struct CardStackView: View {
                         coordinator.updateCard(updatedCard, in: stack.id)
                     }
                 ),
-                compiledPrompt: coordinator.compilePrompts(for: stack.id)
+                compiledPrompt: coordinator.compilePrompts(for: stack.id),
+                isTextFieldFocused: $isTextFieldFocused,
+                onTextEntryBegin: {
+                    onTextEntryBegin?(card.position)
+                }
             )
             .scaleEffect(card.isDragging ? 1.05 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: card.isDragging)
@@ -285,20 +296,12 @@ struct CardStackView: View {
     }
 }
 
-#Preview {
+#Preview("CardStackView", traits: .sizeThatFitsLayout) {
     @Previewable @StateObject var coordinator = CardCoordinator()
     @Previewable @State var stack = CardStack(position: CGPoint(x: 200, y: 200))
+    @Previewable @FocusState var isTextFieldFocused: Bool
     
-    CardStackView(coordinator: coordinator, stack: $stack)
+    CardStackView(coordinator: coordinator, stack: $stack, isTextFieldFocused: $isTextFieldFocused, onTextEntryBegin: { _ in })
         .frame(width: 600, height: 400)
         .background(platformBackgroundColor())
-}
-
-// Cross-platform background color helper
-private func platformBackgroundColor() -> Color {
-#if os(macOS)
-    return Color(nsColor: .windowBackgroundColor)
-#else
-    return Color(uiColor: .systemBackground)
-#endif
 }

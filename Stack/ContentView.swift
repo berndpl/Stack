@@ -11,11 +11,18 @@ struct ContentView: View {
     @State private var accumulatedScale: CGFloat = 0.8  // Start at initial zoom level
     @State private var transientScale: CGFloat = 1.0
     
+    // Keyboard and text entry state
+    @State private var isKeyboardActive: Bool = false
+    @State private var isTextEntryActive: Bool = false
+    @FocusState private var isTextFieldFocused: Bool
+    @State private var activeCardPosition: CGPoint? = nil
+    
     // Zoom limits
     private let minZoom: CGFloat = 0.5  // 50% - prevents interface from becoming too small
     private let maxZoom: CGFloat = 2.0  // 200% - prevents interface from becoming too large
     private let defaultZoom: CGFloat = 1.0  // 100% - default zoom level for expanded stacks
     private let initialZoom: CGFloat = 0.8  // 80% - initial zoom level for overview
+    private let textEntryZoom: CGFloat = 1.2  // 120% - zoom level for text entry
     
     private var effectivePan: CGSize {
         CGSize(width: accumulatedPan.width + transientPan.width,
@@ -48,7 +55,15 @@ struct ContentView: View {
                     
                     // Stack views
                     ForEach($coordinator.stacks) { $stack in
-                        CardStackView(coordinator: coordinator, stack: $stack)
+                        CardStackView(
+                            coordinator: coordinator, 
+                            stack: $stack,
+                            isTextFieldFocused: $isTextFieldFocused,
+                            onTextEntryBegin: { cardPosition in
+                                activeCardPosition = cardPosition
+                                beginTextEntry()
+                            }
+                        )
                     }
                 }
                 .scaleEffect(effectiveScale)
@@ -73,76 +88,98 @@ struct ContentView: View {
                 HStack {
                     Spacer()
                     
-                    // Reset button
-                    Button(action: {
-                        coordinator.resetToInitialState(screenSize: coordinator.currentScreenSize)
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.clockwise.circle.fill")
-                            Text("Reset")
+                    if isTextEntryActive {
+                        // Done button (only show when text entry is active)
+                        Button(action: {
+                            endTextEntry()
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "checkmark.circle.fill")
+                                Text("Done")
+                            }
+                            .font(.system(size: 18, weight: .semibold))
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 14)
+                            .background(.regularMaterial)
+                            .cornerRadius(25)
                         }
-                        .font(.system(size: 16, weight: .medium))
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .background(.regularMaterial)
-                        .cornerRadius(25)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top)
-                    .padding(.trailing, 10)
-                    
-                    // Add new stack button
-                    Button(action: {
-                        // Add new stack at center of screen
-                        coordinator.addNewStack(at: CGPoint(x: 0, y: 0))
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "plus.circle.fill")
-                            Text("New Stack")
+                        .buttonStyle(.plain)
+                        .padding(.top)
+                        .padding(.trailing)
+                    } else {
+                        // Reset button
+                        Button(action: {
+                            coordinator.resetToInitialState(screenSize: coordinator.currentScreenSize)
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.clockwise.circle.fill")
+                                Text("Reset")
+                            }
+                            .font(.system(size: 16, weight: .medium))
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                            .background(.regularMaterial)
+                            .cornerRadius(25)
                         }
-                        .font(.system(size: 16, weight: .medium))
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .background(.regularMaterial)
-                        .cornerRadius(25)
+                        .buttonStyle(.plain)
+                        .padding(.top)
+                        .padding(.trailing, 10)
+                        
+                        // Add new stack button
+                        Button(action: {
+                            // Add new stack at center of screen
+                            coordinator.addNewStack(at: CGPoint(x: 0, y: 0))
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "plus.circle.fill")
+                                Text("New Stack")
+                            }
+                            .font(.system(size: 16, weight: .medium))
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                            .background(.regularMaterial)
+                            .cornerRadius(25)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top)
+                        .padding(.trailing)
                     }
-                    .buttonStyle(.plain)
-                    .padding(.top)
-                    .padding(.trailing)
                 }
                 
                 Spacer()
                 
-                // Bottom controls
-                HStack {
-                    Spacer()
-                    
-                    // Play button
-                    Button(action: {
-                        Task {
-                            await coordinator.generateAllStacks()
-                        }
-                    }) {
-                        HStack(spacing: 6) {
-                            if coordinator.isGeneratingAll {
-                                ProgressView()
-                                    .controlSize(.small)
-                            } else {
-                                Image(systemName: "play.circle.fill")
+                // Bottom controls (only show when not in text entry mode)
+                if !isTextEntryActive {
+                    HStack {
+                        Spacer()
+                        
+                        // Play button
+                        Button(action: {
+                            Task {
+                                await coordinator.generateAllStacks()
                             }
-                            Text(coordinator.isGeneratingAll ? coordinator.formatElapsedTime() : "Play")
+                        }) {
+                            HStack(spacing: 6) {
+                                if coordinator.isGeneratingAll {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "play.circle.fill")
+                                }
+                                Text(coordinator.isGeneratingAll ? coordinator.formatElapsedTime() : "Play")
+                            }
+                            .font(.system(size: 16, weight: .medium))
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                            .background(.regularMaterial)
+                            .cornerRadius(25)
                         }
-                        .font(.system(size: 16, weight: .medium))
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .background(.regularMaterial)
-                        .cornerRadius(25)
+                        .buttonStyle(.plain)
+                        .disabled(coordinator.isGeneratingAll)
+                        .padding(.bottom)
+                        
+                        Spacer()
                     }
-                    .buttonStyle(.plain)
-                    .disabled(coordinator.isGeneratingAll)
-                    .padding(.bottom)
-                    
-                    Spacer()
                 }
             }
         }
@@ -157,6 +194,13 @@ struct ContentView: View {
             let hasSpreadOutStack = stacks.contains { $0.isSpreadOut }
             if hasSpreadOutStack && effectiveScale < defaultZoom {
                 zoomToDefaultLevel()
+            }
+        }
+        .onChange(of: isTextFieldFocused) { isFocused in
+            if isFocused {
+                beginTextEntry()
+            } else {
+                endTextEntry()
             }
         }
     }
@@ -204,16 +248,59 @@ struct ContentView: View {
             accumulatedScale = initialZoom
         }
     }
+    
+    private func zoomToTextEntryLevel() {
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+            accumulatedScale = textEntryZoom
+        }
+    }
+    
+    private func endTextEntry() {
+        isTextEntryActive = false
+        isKeyboardActive = false
+        
+        // Hide keyboard by resigning first responder
+        #if os(iOS)
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        #endif
+        
+        // Zoom back to appropriate level
+        if coordinator.stacks.contains(where: { $0.isSpreadOut }) {
+            zoomToDefaultLevel()
+        } else {
+            zoomToInitialLevel()
+        }
+    }
+    
+    private func beginTextEntry() {
+        isTextEntryActive = true
+        isKeyboardActive = true
+        zoomToTextEntryLevel()
+        panToActiveCard()
+    }
+    
+    private func panToActiveCard() {
+        guard let cardPosition = activeCardPosition else { return }
+        
+        let screenSize = coordinator.currentScreenSize
+        let cardWidth = CardConfig.promptWidth
+        let cardHeight = CardConfig.promptHeight
+        
+        // Calculate the desired pan offset to center the card
+        let targetX = screenSize.width / 2 - cardPosition.x
+        let targetY = screenSize.height / 2 - cardPosition.y
+        
+        // Add some padding to ensure the card is fully visible
+        let padding: CGFloat = 50
+        let adjustedTargetX = max(-screenSize.width / 2 + padding, min(screenSize.width / 2 - padding, targetX))
+        let adjustedTargetY = max(-screenSize.height / 2 + padding, min(screenSize.height / 2 - padding, targetY))
+        
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+            accumulatedPan = CGSize(width: adjustedTargetX, height: adjustedTargetY)
+        }
+    }
 }
 
-// Cross-platform background color helper
-private func platformBackgroundColor() -> Color {
-#if os(macOS)
-    return Color(nsColor: .windowBackgroundColor)
-#else
-    return Color(uiColor: .systemBackground)
-#endif
-}
 
 // Background grid
 struct GridBackground: View {

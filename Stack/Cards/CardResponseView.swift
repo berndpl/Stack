@@ -6,73 +6,58 @@ struct CardResponseView: View {
     var generationTime: TimeInterval?
     var onDelete: (() -> Void)?
     
+    private var cardStyle: CardStyle {
+        CardTheme.response.style
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header
-            HStack {
-                Text("Response")
-                    .font(.title2)
-                    .foregroundStyle(.primary)
-                    .fontDesign(.rounded)
-                    .fontWeight(.heavy)
-                
-                Spacer()
-                
-                // Delete button
-                Button(action: {
-                    onDelete?()
-                }) {
-                    Image(systemName: "minus.circle.fill")
-                        .font(.title2)
+        CardContainer(style: cardStyle) {
+            CardContentContainer {
+                // Header
+                CardHeader(title: "Response", style: cardStyle) {
+                    CardActionButton(
+                        icon: CardIcons.delete,
+                        color: CardButtonColors.delete,
+                        isDisabled: responseText.isEmpty,
+                        action: { onDelete?() }
+                    )
                 }
-                .buttonStyle(.plain)
-                .disabled(responseText.isEmpty)
-            }
-            
-            // Response content
-            ScrollView {
-                TextEditor(text: $responseText)
-                    .font(.body)
-                    .scrollContentBackground(.hidden)
-                    .background(Color.clear)
-                    .disabled(isStreaming)
-            }
-            .background(
-                Group {
-                    if responseText.isEmpty && !isStreaming {
-                        Text("Response will appear here...")
-                            .font(.body)
+                
+                // Response content
+                ScrollView {
+                    TextEditor(text: $responseText)
+                        .font(cardStyle.bodyFont)
+                        .scrollContentBackground(.hidden)
+                        .background(Color.clear)
+                        .disabled(isStreaming)
+                }
+                .background(
+                    Group {
+                        if responseText.isEmpty && !isStreaming {
+                            Text("Response will appear here...")
+                                .font(cardStyle.bodyFont)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                    }
+                )
+                
+                // Footer with word count and generation time
+                HStack {
+                    if !responseText.isEmpty {
+                        Text("\(wordCount(responseText)) words")
+                            .font(cardStyle.captionFont)
                             .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        Spacer()
+                        if let generationTime = generationTime {
+                            Text("\(formatGenerationTime(generationTime))")
+                                .font(cardStyle.captionFont)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
-            )
-            
-            // Footer with word count and generation time
-            HStack {
-                if !responseText.isEmpty {
-                    Text("\(wordCount(responseText)) words")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    
-                    if let generationTime = generationTime {
-                        Text("• \(formatGenerationTime(generationTime))")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer()
             }
         }
-        .padding(16)
-        .frame(width: 260, height: 180)
-        .background(Color.orange)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24)
-                .strokeBorder(Color.blue.opacity(0.1), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.06), radius: 24, x: 0, y: 3)
     }
     
     func setStreaming(_ streaming: Bool) {
@@ -99,7 +84,7 @@ struct CardResponseView: View {
 }
 
 #Preview {
-    VStack(spacing: 20) {
+    CardPreviewContainer {
         CardResponseView(
             responseText: .constant("This is a sample response from the LLM. It contains multiple sentences to demonstrate how the response card displays longer content with proper scrolling and formatting."),
             generationTime: 2.5,
@@ -118,16 +103,4 @@ struct CardResponseView: View {
             onDelete: { print("Delete tapped") }
         )
     }
-    .padding()
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(platformBackgroundColor())
-}
-
-// Cross-platform background color helper
-private func platformBackgroundColor() -> Color {
-#if os(macOS)
-    return Color(nsColor: .windowBackgroundColor)
-#else
-    return Color(uiColor: .systemBackground)
-#endif
 }

@@ -161,13 +161,13 @@ final class CardCoordinator: ObservableObject {
         let centerX = screenSize.width / 2
         let centerY = screenSize.height / 2
         let cardSpacing: CGFloat = 20
-        let cardHeight: CGFloat = 180
-        let cardWidth: CGFloat = 260
+        let cardHeight: CGFloat = CardConfig.promptHeight
+        let cardWidth: CGFloat = CardConfig.promptWidth
         let stackOffset: CGFloat = 8 // Small offset for stacked state
         
         // Add safe area padding to ensure cards are fully visible
         let safeAreaTop: CGFloat = 120 // Account for status bar, navigation, and top controls
-        let safeAreaBottom: CGFloat = 180 // Account for home indicator, bottom controls, and extra padding
+        let safeAreaBottom: CGFloat = 200 // Account for home indicator, bottom controls, and extra padding
         let safeAreaLeft: CGFloat = 20 // Account for side margins
         let safeAreaRight: CGFloat = 20
         
@@ -221,7 +221,7 @@ final class CardCoordinator: ObservableObject {
         
         // Add safe area padding to ensure cards are fully visible
         let safeAreaTop: CGFloat = 120 // Account for status bar, navigation, and top controls
-        let safeAreaBottom: CGFloat = 180 // Account for home indicator, bottom controls, and extra padding
+        let safeAreaBottom: CGFloat = 200 // Account for home indicator, bottom controls, and extra padding
         let safeAreaLeft: CGFloat = 20 // Account for side margins
         let safeAreaRight: CGFloat = 20
         
@@ -269,7 +269,7 @@ final class CardCoordinator: ObservableObject {
         
         // Add safe area padding to ensure cards are fully visible
         let safeAreaTop: CGFloat = 120 // Account for status bar, navigation, and top controls
-        let safeAreaBottom: CGFloat = 180 // Account for home indicator, bottom controls, and extra padding
+        let safeAreaBottom: CGFloat = 200 // Account for home indicator, bottom controls, and extra padding
         let safeAreaLeft: CGFloat = 20 // Account for side margins
         let safeAreaRight: CGFloat = 20
         
