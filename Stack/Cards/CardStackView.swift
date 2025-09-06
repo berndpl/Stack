@@ -9,6 +9,7 @@ struct CardStackView: View {
     
     @State private var dragOffset: CGSize = .zero
     @State private var screenSize: CGSize = .zero
+    @State private var activeCardId: UUID? = nil
     
     var body: some View {
         GeometryReader { geometry in
@@ -49,6 +50,11 @@ struct CardStackView: View {
             .onChange(of: stack.cards.count) { _ in
                 coordinator.updateCardPositions(in: stack.id, screenSize: screenSize)
             }
+            .onChange(of: isTextFieldFocused) { isFocused in
+                if !isFocused {
+                    activeCardId = nil
+                }
+            }
         }
     }
     
@@ -60,7 +66,6 @@ struct CardStackView: View {
                 promptText: Binding(
                     get: {
                         let text = card.promptText ?? ""
-                        print("📖 Getting prompt text: '\(text)'")
                         return text
                     },
                     set: { newValue in
@@ -83,13 +88,19 @@ struct CardStackView: View {
                 },
                 isTextFieldFocused: $isTextFieldFocused,
                 onTextEntryBegin: {
+                    activeCardId = card.id
+                    coordinator.setCardActive(card.id, active: true, in: stack.id)
                     onTextEntryBegin?(card.position)
+                },
+                onTextEntryEnd: {
+                    coordinator.setCardActive(card.id, active: false, in: stack.id)
                 }
             )
             .scaleEffect(card.isDragging ? 1.05 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: card.isDragging)
             .shadow(radius: card.isDragging ? 10 : 4)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: card.isDragging)
+            .opacity(1.0)
             .gesture(cardDragGesture(for: card))
             
         case .llm:
@@ -113,13 +124,19 @@ struct CardStackView: View {
                 compiledPrompt: coordinator.compilePrompts(for: stack.id),
                 isTextFieldFocused: $isTextFieldFocused,
                 onTextEntryBegin: {
+                    activeCardId = card.id
+                    coordinator.setCardActive(card.id, active: true, in: stack.id)
                     onTextEntryBegin?(card.position)
+                },
+                onTextEntryEnd: {
+                    coordinator.setCardActive(card.id, active: false, in: stack.id)
                 }
             )
             .scaleEffect(card.isDragging ? 1.05 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: card.isDragging)
             .shadow(radius: card.isDragging ? 10 : 4)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: card.isDragging)
+            .opacity(1.0)
             .gesture(cardDragGesture(for: card))
             
         case .response:
@@ -139,13 +156,15 @@ struct CardStackView: View {
             )
             .scaleEffect(card.isDragging ? 1.05 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: card.isDragging)
-            .opacity(card.isAnimatingOut ? 0.0 : (card.isAnimatingIn ? 0.0 : 1.0))
+            .opacity(card.isAnimatingOut ? 0.0 : (card.isAnimatingIn ? 0.0 : (isTextFieldFocused ? (activeCardId == card.id ? 1.0 : 0.2) : 1.0)))
             .offset(y: card.isAnimatingIn ? 100 : (card.isInitialAppearance ? getInitialAnimationOffset(for: card, screenSize: screenSize) : 0)) // Animate from bottom for response, from top center for initial
             .rotationEffect(.degrees(stack.isSpreadOut ? 0 : getStackRotation(for: card)))
             .shadow(radius: card.isDragging ? 10 : 4)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: card.isDragging)
             .animation(.spring(response: 0.6, dampingFraction: 0.8), value: card.isAnimatingIn)
             .animation(.easeInOut(duration: 0.3), value: card.isAnimatingOut)
+            .animation(.easeInOut(duration: 0.3), value: isTextFieldFocused)
+            .animation(.easeInOut(duration: 0.3), value: activeCardId)
             .animation(.spring(response: 0.6, dampingFraction: 0.8), value: card.position)
             .animation(.spring(response: 0.6, dampingFraction: 0.8), value: stack.isSpreadOut)
             .animation(.spring(response: 0.5, dampingFraction: 0.8), value: card.isInitialAppearance)

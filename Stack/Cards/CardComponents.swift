@@ -21,7 +21,7 @@ struct CardHeader: View {
                 .foregroundStyle(.primary)
                 .fontDesign(.rounded)
                 .fontWeight(.heavy)
-            
+                .font(.title2)
             Spacer()
             
             trailingContent

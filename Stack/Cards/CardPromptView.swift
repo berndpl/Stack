@@ -10,6 +10,7 @@ struct CardPromptView: View {
     var onRemovePrompt: (() -> Void)?
     @FocusState.Binding var isTextFieldFocused: Bool
     var onTextEntryBegin: (() -> Void)?
+    var onTextEntryEnd: (() -> Void)?
     
     private var cardStyle: CardStyle {
         CardStyle.prompt(hue: Double(colorIndex))
@@ -50,8 +51,12 @@ struct CardPromptView: View {
                             .scrollContentBackground(.hidden)
                             .background(Color.clear)
                             .focused($isTextFieldFocused)
-                            .onTapGesture {
-                                onTextEntryBegin?()
+                            .onChange(of: isTextFieldFocused) { isFocused in
+                                if isFocused {
+                                    onTextEntryBegin?()
+                                } else {
+                                    onTextEntryEnd?()
+                                }
                             }
                             .onChange(of: promptText) { _, newValue in
                                 print("🔄 Prompt text changed to: '\(newValue)'")
@@ -87,7 +92,8 @@ struct CardPromptView: View {
             onAddPrompt: { print("Add prompt tapped") },
             onRemovePrompt: { print("Remove prompt tapped") },
             isTextFieldFocused: $isTextFieldFocused,
-            onTextEntryBegin: { print("Text entry began") }
+            onTextEntryBegin: { print("Text entry began") },
+            onTextEntryEnd: { print("Text entry ended") }
         )
         
         CardPromptView(
@@ -98,7 +104,8 @@ struct CardPromptView: View {
             onAddPrompt: { print("Add prompt tapped") },
             onRemovePrompt: { print("Remove prompt tapped") },
             isTextFieldFocused: $isTextFieldFocused,
-            onTextEntryBegin: { print("Text entry began") }
+            onTextEntryBegin: { print("Text entry began") },
+            onTextEntryEnd: { print("Text entry ended") }
         )
     }
 }

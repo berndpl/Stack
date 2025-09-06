@@ -48,6 +48,10 @@ Top Level
 
 ---
 
+Comparing alternative versions.
+
+When tapping "Compare" a linked duplicate of the current stack is created and positions right nexr to the current stack.
+Then the canvas auto pans to it horizontally and centers it
 
 
 ---

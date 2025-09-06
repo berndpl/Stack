@@ -8,6 +8,7 @@ struct CardLLMView: View {
     var compiledPrompt: String = ""
     @FocusState.Binding var isTextFieldFocused: Bool
     var onTextEntryBegin: (() -> Void)?
+    var onTextEntryEnd: (() -> Void)?
     
     private var cardStyle: CardStyle {
         CardTheme.llm.style
@@ -23,19 +24,30 @@ struct CardLLMView: View {
                 // Configuration
                 VStack(spacing: 8) {
                     TextField("Ollama URL", text: $host)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 12))
+                        .textFieldStyle(.automatic)
+                        .fontDesign(.monospaced)
+                        .font(cardStyle.bodyFont)
                         .focused($isTextFieldFocused)
-                        .onTapGesture {
-                            onTextEntryBegin?()
+                        .onChange(of: isTextFieldFocused) { isFocused in
+                            if isFocused {
+                                onTextEntryBegin?()
+                            } else {
+                                onTextEntryEnd?()
+                            }
                         }
                     
                     TextField("Model (e.g., llama3)", text: $model)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 12))
+                        .textFieldStyle(.automatic)
+                        .font(cardStyle.bodyFont)
+                        .fontDesign(.monospaced)
                         .focused($isTextFieldFocused)
-                        .onTapGesture {
-                            onTextEntryBegin?()
+                        .onChange(of: isTextFieldFocused) { isFocused in
+                            if isFocused {
+                                print("🔧 CardLLMView: Model TextField focused")
+                                onTextEntryBegin?()
+                            } else {
+                                onTextEntryEnd?()
+                            }
                         }
                 }
             }
@@ -53,7 +65,8 @@ struct CardLLMView: View {
             model: .constant("llama3"),
             compiledPrompt: "Who am I?\n\nWhat is my purpose?",
             isTextFieldFocused: $isTextFieldFocused,
-            onTextEntryBegin: { print("Text entry began") }
+            onTextEntryBegin: { print("Text entry began") },
+            onTextEntryEnd: { print("Text entry ended") }
         )
         
         CardLLMView(
@@ -61,7 +74,8 @@ struct CardLLMView: View {
             model: .constant(""),
             compiledPrompt: "",
             isTextFieldFocused: $isTextFieldFocused,
-            onTextEntryBegin: { print("Text entry began") }
+            onTextEntryBegin: { print("Text entry began") },
+            onTextEntryEnd: { print("Text entry ended") }
         )
     }
 }

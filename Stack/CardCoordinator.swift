@@ -9,6 +9,7 @@ struct Card: Identifiable, Equatable {
     var position: CGPoint
     var isExpanded: Bool
     var isDragging: Bool
+    var isActive: Bool // Whether any text field in this card is active
     
     // Animation properties
     var isAnimatingIn: Bool
@@ -34,6 +35,7 @@ struct Card: Identifiable, Equatable {
         self.position = position
         self.isExpanded = false
         self.isDragging = false
+        self.isActive = false
         self.isAnimatingIn = false
         self.isAnimatingOut = false
         self.isInitialAppearance = true
@@ -90,6 +92,10 @@ final class CardCoordinator: ObservableObject {
     @Published var generationStartTime: Date?
     @Published var elapsedTime: TimeInterval = 0
     
+//    var startPoint: CGPoint {
+//        return CGPoint(x: screenSize.width/2, y: screenSize.height/2-80.0)
+//    }
+    
     var currentScreenSize: CGSize = CGSize(width: 1024, height: 768)
     
     private let ollamaClient = OllamaClient()
@@ -98,7 +104,9 @@ final class CardCoordinator: ObservableObject {
     init() {
         // Start with one default stack centered on screen
         // The actual position will be calculated when the view appears
-        addNewStack(at: CGPoint(x: 0, y: 0))
+        let centerX = currentScreenSize.width / 2
+        let centerY = currentScreenSize.height / 2 - 80.0 // Offset up slightly
+        addNewStack(at: CGPoint(x: centerX, y: centerY))
     }
     
     // MARK: - Stack Management
@@ -125,7 +133,8 @@ final class CardCoordinator: ObservableObject {
         let insertIndex = promptCards.count
         
         // Create new prompt card with temporary position and correct color index
-        let newPrompt = Card(type: .prompt, position: CGPoint(x: 0, y: 0), colorIndex: promptCards.count)
+        let centerX = currentScreenSize.width / 2
+        let newPrompt = Card(type: .prompt, position: CGPoint(x: centerX, y: 0), colorIndex: promptCards.count)
         
         // Insert the new card
         stacks[stackIndex].cards.insert(newPrompt, at: insertIndex)
@@ -153,6 +162,21 @@ final class CardCoordinator: ObservableObject {
               let cardIndex = stacks[stackIndex].cards.firstIndex(where: { $0.id == cardId }) else { return }
         
         stacks[stackIndex].cards[cardIndex].isDragging = dragging
+    }
+    
+    func setCardActive(_ cardId: UUID, active: Bool, in stackId: UUID) {
+        guard let stackIndex = stacks.firstIndex(where: { $0.id == stackId }),
+              let cardIndex = stacks[stackIndex].cards.firstIndex(where: { $0.id == cardId }) else { return }
+        
+        stacks[stackIndex].cards[cardIndex].isActive = active
+    }
+    
+    func setAllCardsInactive() {
+        for stackIndex in stacks.indices {
+            for cardIndex in stacks[stackIndex].cards.indices {
+                stacks[stackIndex].cards[cardIndex].isActive = false
+            }
+        }
     }
     
     func updateCardPositions(in stackId: UUID, screenSize: CGSize) {
@@ -365,7 +389,7 @@ final class CardCoordinator: ObservableObject {
         stacks.removeAll()
         
         // Create a fresh default stack (same as in init)
-        addNewStack(at: CGPoint(x: 0, y: 0))
+        addNewStack(at: CGPoint(x: screenSize.width/2, y: screenSize.height/2-80.0))
         
         // Update positions for the new stack
         if let firstStack = stacks.first {
