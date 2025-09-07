@@ -1,93 +1,11 @@
 import SwiftUI
 import Foundation
 
-// MARK: - Card Models
-
-struct Card: Identifiable, Equatable {
-    let id: UUID
-    var type: CardType
-    var position: CGPoint
-    var isExpanded: Bool
-    var isDragging: Bool
-    var isActive: Bool // Whether any text field in this card is active
-    
-    // Animation properties
-    var isAnimatingIn: Bool
-    var isAnimatingOut: Bool
-    var isInitialAppearance: Bool
-    
-    // Prompt card properties
-    var promptText: String?
-    var colorIndex: Int // For retaining color when reordered
-    
-    // LLM card properties
-    var llmHost: String?
-    var llmModel: String?
-    
-    // Response card properties
-    var responseText: String?
-    var isBusy: Bool
-    var generationTime: TimeInterval? // Time taken to generate the response
-    
-    init(id: UUID = UUID(), type: CardType, position: CGPoint = .zero, colorIndex: Int = 0) {
-        self.id = id
-        self.type = type
-        self.position = position
-        self.isExpanded = false
-        self.isDragging = false
-        self.isActive = false
-        self.isAnimatingIn = false
-        self.isAnimatingOut = false
-        self.isInitialAppearance = true
-        self.colorIndex = colorIndex
-        self.isBusy = false
-        self.generationTime = nil
-        
-        // Set defaults based on type
-        switch type {
-        case .prompt:
-            self.promptText = "Who are you?"
-        case .llm:
-            self.llmHost = "http://Bernds-MacBook-Pro.local:11434"
-            self.llmModel = "gpt-oss:20b"
-        case .response:
-            self.responseText = ""
-         }
-    }
-}
-
-enum CardType: String, CaseIterable {
-    case prompt = "Prompt"
-    case llm = "LLM" 
-    case response = "Response"
-}
-
-struct CardStack: Identifiable, Equatable {
-    let id: UUID
-    var cards: [Card]
-    var position: CGPoint
-    var isRunning: Bool
-    var isSpreadOut: Bool
-    
-    init(id: UUID = UUID(), position: CGPoint = .zero) {
-        self.id = id
-        self.position = position
-        self.isRunning = false
-        self.isSpreadOut = false
-        
-        // Default stack: Prompt and LLM cards stacked vertically
-        let promptCard = Card(type: .prompt, position: CGPoint(x: position.x, y: position.y - 60), colorIndex: 0)
-        let llmCard = Card(type: .llm, position: CGPoint(x: position.x, y: position.y + 60))
-        
-        self.cards = [promptCard, llmCard]
-    }
-}
-
 // MARK: - CardCoordinator
 
 @MainActor
 final class CardCoordinator: ObservableObject {
-    @Published var stacks: [CardStack] = []
+    @Published var stacks: [Stack] = []
     @Published var isGeneratingAll: Bool = false
     @Published var generationStartTime: Date?
     @Published var elapsedTime: TimeInterval = 0
@@ -112,7 +30,7 @@ final class CardCoordinator: ObservableObject {
     // MARK: - Stack Management
     
     func addNewStack(at position: CGPoint) {
-        let newStack = CardStack(position: position)
+        let newStack = Stack(position: position)
         stacks.append(newStack)
         
         // If this is the first stack and we're using default positioning, 
@@ -129,12 +47,16 @@ final class CardCoordinator: ObservableObject {
         guard let stackIndex = stacks.firstIndex(where: { $0.id == stackId }) else { return }
         
         // Find the last prompt card to insert after it
-        let promptCards = stacks[stackIndex].cards.filter { $0.type == .prompt }
+        let promptCards = stacks[stackIndex].promptCards
         let insertIndex = promptCards.count
         
         // Create new prompt card with temporary position and correct color index
         let centerX = currentScreenSize.width / 2
-        let newPrompt = Card(type: .prompt, position: CGPoint(x: centerX, y: 0), colorIndex: promptCards.count)
+        let newPromptCard = PromptCard(
+            position: CGPoint(x: centerX, y: 0),
+            colorIndex: promptCards.count
+        )
+        let newPrompt = Card.prompt(newPromptCard)
         
         // Insert the new card
         stacks[stackIndex].cards.insert(newPrompt, at: insertIndex)
@@ -407,24 +329,11 @@ final class CardCoordinator: ObservableObject {
         
         print("🔍 Compiling prompts for stack with \(stack.cards.count) cards")
         
-        // Get all prompt cards in their current order (as they appear in the cards array)
-        let promptCards = stack.cards.filter { $0.type == .prompt }
-        print("📝 Found \(promptCards.count) prompt cards")
+        // Use the new compiledPrompt property from Stack
+        let compiledPrompt = stack.compiledPrompt
+        print("📝 Compiled prompt: '\(compiledPrompt)'")
         
-        for (index, card) in promptCards.enumerated() {
-            print("  Card \(index): text='\(card.promptText ?? "nil")'")
-        }
-        
-        // Combine all prompt cards in their order, filtering out empty ones
-        let activePromptCards = promptCards
-            .compactMap { $0.promptText }
-            .filter { !$0.isEmpty }
-        
-        print("✅ Active prompt cards: \(activePromptCards.count)")
-        let result = activePromptCards.joined(separator: "\n\n")
-        print("📄 Compiled prompt: '\(result)'")
-        
-        return result
+        return compiledPrompt
     }
     
     // MARK: - Generation
@@ -454,12 +363,13 @@ final class CardCoordinator: ObservableObject {
         }
         
         // Find LLM card
-        guard let llmCard = stacks[stackIndex].cards.first(where: { $0.type == .llm }) else {
+        guard let card = stacks[stackIndex].cards.first(where: { $0.type == .llm }),
+              case .llm(let llmCard) = card else {
             return
         }
         
-        let host = llmCard.llmHost ?? ""
-        let model = llmCard.llmModel ?? ""
+        let host = llmCard.host
+        let model = llmCard.model
         let prompt = compilePrompts(for: stackId)
         
         print("🚀 Starting generation...")
@@ -514,35 +424,45 @@ final class CardCoordinator: ObservableObject {
                 // After animation completes, update the text and animate back in
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                        self.stacks[stackIndex].cards[existingIndex].responseText = initialText
-                        self.stacks[stackIndex].cards[existingIndex].generationTime = generationTime
-                        self.stacks[stackIndex].cards[existingIndex].isAnimatingOut = false
-                        self.stacks[stackIndex].cards[existingIndex].isAnimatingIn = true
+                        if case .response(var responseCard) = self.stacks[stackIndex].cards[existingIndex] {
+                            responseCard.text = initialText
+                            responseCard.generationTime = generationTime
+                            responseCard.isAnimatingOut = false
+                            responseCard.isAnimatingIn = true
+                            self.stacks[stackIndex].cards[existingIndex] = .response(responseCard)
+                        }
                     }
                     
                     // Stop animating in after animation completes
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                         withAnimation(.easeOut(duration: 0.2)) {
-                            self.stacks[stackIndex].cards[existingIndex].isAnimatingIn = false
+                            if case .response(var responseCard) = self.stacks[stackIndex].cards[existingIndex] {
+                                responseCard.isAnimatingIn = false
+                                self.stacks[stackIndex].cards[existingIndex] = .response(responseCard)
+                            }
                         }
                     }
                 }
             } else {
                 // Just update the text without animation
-                stacks[stackIndex].cards[existingIndex].responseText = initialText
-                stacks[stackIndex].cards[existingIndex].generationTime = generationTime
+                if case .response(var responseCard) = stacks[stackIndex].cards[existingIndex] {
+                    responseCard.text = initialText
+                    responseCard.generationTime = generationTime
+                    stacks[stackIndex].cards[existingIndex] = .response(responseCard)
+                }
             }
             return existingIndex
         }
         
         // Create new response card
-        let responseCard = Card(type: .response, position: .zero) // Position will be set by updateCardPositions
-        var newResponseCard = responseCard
-        newResponseCard.responseText = initialText
+        var newResponseCard = ResponseCard(
+            position: .zero, // Position will be set by updateCardPositions
+            text: initialText
+        )
         newResponseCard.generationTime = generationTime
         newResponseCard.isInitialAppearance = false // Response cards don't get initial falling animation
         
-        stacks[stackIndex].cards.append(newResponseCard)
+        stacks[stackIndex].cards.append(.response(newResponseCard))
         let newIndex = stacks[stackIndex].cards.count - 1
         
         // Only animate if we have content and should animate
@@ -614,7 +534,61 @@ final class CardCoordinator: ObservableObject {
         stacks[stackIndex].position = position
     }
     
-    func getStack(withId stackId: UUID) -> CardStack? {
+    func getStack(withId stackId: UUID) -> Stack? {
         return stacks.first(where: { $0.id == stackId })
+    }
+    
+    // MARK: - New Features Support
+    
+    /// Toggles the mute state of a prompt card
+    func togglePromptCardMute(_ cardId: UUID, in stackId: UUID) {
+        guard let stackIndex = stacks.firstIndex(where: { $0.id == stackId }),
+              let cardIndex = stacks[stackIndex].cards.firstIndex(where: { $0.id == cardId }),
+              case .prompt(var promptCard) = stacks[stackIndex].cards[cardIndex] else { return }
+        
+        promptCard.isMuted.toggle()
+        stacks[stackIndex].cards[cardIndex] = .prompt(promptCard)
+    }
+    
+    /// Toggles the variation state of a prompt card
+    func togglePromptCardVariation(_ cardId: UUID, in stackId: UUID) {
+        guard let stackIndex = stacks.firstIndex(where: { $0.id == stackId }),
+              let cardIndex = stacks[stackIndex].cards.firstIndex(where: { $0.id == cardId }),
+              case .prompt(var promptCard) = stacks[stackIndex].cards[cardIndex] else { return }
+        
+        promptCard.hasVariation.toggle()
+        if promptCard.hasVariation && promptCard.variationText == nil {
+            promptCard.variationText = promptCard.text // Initialize with current text
+        }
+        stacks[stackIndex].cards[cardIndex] = .prompt(promptCard)
+    }
+    
+    /// Updates the variation text of a prompt card
+    func updatePromptCardVariationText(_ cardId: UUID, text: String, in stackId: UUID) {
+        guard let stackIndex = stacks.firstIndex(where: { $0.id == stackId }),
+              let cardIndex = stacks[stackIndex].cards.firstIndex(where: { $0.id == cardId }),
+              case .prompt(var promptCard) = stacks[stackIndex].cards[cardIndex] else { return }
+        
+        promptCard.variationText = text
+        stacks[stackIndex].cards[cardIndex] = .prompt(promptCard)
+    }
+    
+    /// Creates a comparison stack linked to the specified stack
+    func createComparisonStack(for stackId: UUID) {
+        guard let originalStack = stacks.first(where: { $0.id == stackId }) else { return }
+        
+        let comparisonStack = originalStack.createComparisonStack()
+        stacks.append(comparisonStack)
+    }
+    
+    /// Returns true if a card is linked to an original (for comparison stacks)
+    func isCardLinked(_ cardId: UUID, in stackId: UUID) -> Bool {
+        guard let stack = stacks.first(where: { $0.id == stackId }) else { return false }
+        return stack.linkedCardIds.contains(cardId)
+    }
+    
+    /// Returns the display opacity for a card based on its linking status
+    func getCardDisplayOpacity(_ cardId: UUID, in stackId: UUID) -> Double {
+        return isCardLinked(cardId, in: stackId) ? 0.6 : 1.0
     }
 }

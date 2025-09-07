@@ -2,7 +2,7 @@ import SwiftUI
 
 struct CardStackView: View {
     @ObservedObject var coordinator: CardCoordinator
-    @Binding var stack: CardStack
+    @Binding var stack: Stack
     
     @FocusState.Binding var isTextFieldFocused: Bool
     var onTextEntryBegin: ((CGPoint) -> Void)?
@@ -60,22 +60,20 @@ struct CardStackView: View {
     
     @ViewBuilder
     private func cardView(for card: Card) -> some View {
-        switch card.type {
-        case .prompt:
+        switch card {
+        case .prompt(let promptCard):
             CardPromptView(
                 promptText: Binding(
-                    get: {
-                        let text = card.promptText ?? ""
-                        return text
-                    },
+                    get: { promptCard.text },
                     set: { newValue in
                         print("💾 Setting prompt text: '\(newValue)'")
-                        var updatedCard = card
-                        updatedCard.promptText = newValue
+                        var updatedPromptCard = promptCard
+                        updatedPromptCard.text = newValue
+                        let updatedCard = Card.prompt(updatedPromptCard)
                         coordinator.updateCard(updatedCard, in: stack.id)
                     }
                 ),
-                colorIndex: card.colorIndex,
+                colorIndex: promptCard.colorIndex,
                 totalPromptCards: getTotalPromptCards(),
                 onAddToSequence: {
                     coordinator.addPromptCard(to: stack.id)
@@ -103,21 +101,23 @@ struct CardStackView: View {
             .opacity(1.0)
             .gesture(cardDragGesture(for: card))
             
-        case .llm:
+        case .llm(let llmCard):
             CardLLMView(
                 host: Binding(
-                    get: { card.llmHost ?? "" },
+                    get: { llmCard.host },
                     set: { newValue in
-                        var updatedCard = card
-                        updatedCard.llmHost = newValue
+                        var updatedLlmCard = llmCard
+                        updatedLlmCard.host = newValue
+                        let updatedCard = Card.llm(updatedLlmCard)
                         coordinator.updateCard(updatedCard, in: stack.id)
                     }
                 ),
                 model: Binding(
-                    get: { card.llmModel ?? "" },
+                    get: { llmCard.model },
                     set: { newValue in
-                        var updatedCard = card
-                        updatedCard.llmModel = newValue
+                        var updatedLlmCard = llmCard
+                        updatedLlmCard.model = newValue
+                        let updatedCard = Card.llm(updatedLlmCard)
                         coordinator.updateCard(updatedCard, in: stack.id)
                     }
                 ),
@@ -139,17 +139,18 @@ struct CardStackView: View {
             .opacity(1.0)
             .gesture(cardDragGesture(for: card))
             
-        case .response:
+        case .response(let responseCard):
             CardResponseView(
                 responseText: Binding(
-                    get: { card.responseText ?? "" },
+                    get: { responseCard.text },
                     set: { newValue in
-                        var updatedCard = card
-                        updatedCard.responseText = newValue
+                        var updatedResponseCard = responseCard
+                        updatedResponseCard.text = newValue
+                        let updatedCard = Card.response(updatedResponseCard)
                         coordinator.updateCard(updatedCard, in: stack.id)
                     }
                 ),
-                generationTime: card.generationTime,
+                generationTime: responseCard.generationTime,
                 onDelete: {
                     coordinator.removeCard(withId: card.id, from: stack.id)
                 }
@@ -232,7 +233,7 @@ struct CardStackView: View {
     
     private func getTotalPromptCards() -> Int {
         // Get the total number of prompt cards in the stack
-        return stack.cards.filter { $0.type == .prompt }.count
+        return stack.promptCards.count
     }
     
     private func getOriginalCardPosition(for card: Card) -> CGPoint {
@@ -317,7 +318,7 @@ struct CardStackView: View {
 
 #Preview("CardStackView", traits: .sizeThatFitsLayout) {
     @Previewable @StateObject var coordinator = CardCoordinator()
-    @Previewable @State var stack = CardStack(position: CGPoint(x: 200, y: 200))
+    @Previewable @State var stack = Stack(position: CGPoint(x: 200, y: 200))
     @Previewable @FocusState var isTextFieldFocused: Bool
     
     CardStackView(coordinator: coordinator, stack: $stack, isTextFieldFocused: $isTextFieldFocused, onTextEntryBegin: { _ in })

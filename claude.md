@@ -48,10 +48,34 @@ Top Level
 
 ---
 
+## Comparison Interaction
+
 Comparing alternative versions.
 
-When tapping "Compare" a linked duplicate of the current stack is created and positions right nexr to the current stack.
-Then the canvas auto pans to it horizontally and centers it
+When tapping "Compare", the current stack is duplicated.
+All cards are linked to the ordignal cards. until any attributes are overidden
+Cards that are linked appear with 0.6 opacity
+Cards with customized attributes show with full opacity
+
+There is a separate play button at the bottom of each stack that allows running it.
+
+The main play button at the bottom runs all stacks at once with a stingle press.
+
+
+--
+
+## Data Model
+
+Pay special attention to the data structure to create a relatable easy to maintain structure
+
+There are 4 main data model types defines as structs, 3 Types of Cards and Stacks. 
+
++ Prompt Card
++ LLM Card
++ Response Card
++ Stack
+ - Linking to all cards in a Stack
+
 
 
 ---

@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 struct ContentView: View {
     @StateObject private var coordinator = CardCoordinator()
@@ -48,6 +51,12 @@ struct ContentView: View {
                     Color.clear
                         .contentShape(Rectangle())
                         .onTapGesture { location in
+                            // If in text entry mode, dismiss it first
+                            if isTextEntryActive {
+                                dismissTextEntry()
+                                return
+                            }
+                            
                             // Collapse all spread-out stacks when tapping on background
                             coordinator.collapseAllStacks(screenSize: geometry.size)
                             
@@ -213,6 +222,7 @@ struct ContentView: View {
                 endTextEntry()
             }
         }
+        #if os(iOS)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
             if let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
                 keyboardHeight = keyboardFrame.height
@@ -221,11 +231,10 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             keyboardHeight = 0
         }
+        #endif
         .onChange(of: keyboardHeight) { _ in
-            // Re-pan to active card when keyboard height changes
-            if isTextEntryActive {
-                panToActiveCard()
-            }
+            // Removed panning behavior when keyboard height changes during text editing
+            // Only zoom behavior is preserved
         }
     }
     
@@ -337,6 +346,11 @@ struct ContentView: View {
         }
     }
     
+    private func dismissTextEntry() {
+        // Force dismiss text entry by unfocusing the text field
+        isTextFieldFocused = false
+    }
+    
     private func beginTextEntry() {
         isTextEntryActive = true
         isKeyboardActive = true
@@ -348,7 +362,8 @@ struct ContentView: View {
             findAndSetActiveCardPosition()
         }
         
-        panToActiveCard()
+        // Removed panToActiveCard() call to prevent panning when editing text
+        // Only zoom behavior is preserved
     }
     
     private func findAndSetActiveCardPosition() {
