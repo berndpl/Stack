@@ -59,21 +59,21 @@ struct CardStackView: View {
     }
     
     @ViewBuilder
-    private func cardView(for card: Card) -> some View {
+    private func cardView(for card: CardViewState) -> some View {
         switch card {
-        case .prompt(let promptCard):
+        case .prompt(let promptData, let promptState):
             CardPromptView(
                 promptText: Binding(
-                    get: { promptCard.text },
+                    get: { promptData.text },
                     set: { newValue in
                         print("💾 Setting prompt text: '\(newValue)'")
-                        var updatedPromptCard = promptCard
-                        updatedPromptCard.text = newValue
-                        let updatedCard = Card.prompt(updatedPromptCard)
+                        var updatedPromptData = promptData
+                        updatedPromptData.text = newValue
+                        let updatedCard = CardViewState.prompt(updatedPromptData, promptState)
                         coordinator.updateCard(updatedCard, in: stack.id)
                     }
                 ),
-                colorIndex: promptCard.colorIndex,
+                colorIndex: promptData.colorIndex,
                 totalPromptCards: getTotalPromptCards(),
                 onAddToSequence: {
                     coordinator.addPromptCard(to: stack.id)
@@ -101,23 +101,23 @@ struct CardStackView: View {
             .opacity(1.0)
             .gesture(cardDragGesture(for: card))
             
-        case .llm(let llmCard):
+        case .llm(let llmData, let llmState):
             CardLLMView(
                 host: Binding(
-                    get: { llmCard.host },
+                    get: { llmData.host },
                     set: { newValue in
-                        var updatedLlmCard = llmCard
-                        updatedLlmCard.host = newValue
-                        let updatedCard = Card.llm(updatedLlmCard)
+                        var updatedLlmData = llmData
+                        updatedLlmData.host = newValue
+                        let updatedCard = CardViewState.llm(updatedLlmData, llmState)
                         coordinator.updateCard(updatedCard, in: stack.id)
                     }
                 ),
                 model: Binding(
-                    get: { llmCard.model },
+                    get: { llmData.model },
                     set: { newValue in
-                        var updatedLlmCard = llmCard
-                        updatedLlmCard.model = newValue
-                        let updatedCard = Card.llm(updatedLlmCard)
+                        var updatedLlmData = llmData
+                        updatedLlmData.model = newValue
+                        let updatedCard = CardViewState.llm(updatedLlmData, llmState)
                         coordinator.updateCard(updatedCard, in: stack.id)
                     }
                 ),
@@ -139,18 +139,18 @@ struct CardStackView: View {
             .opacity(1.0)
             .gesture(cardDragGesture(for: card))
             
-        case .response(let responseCard):
+        case .response(let responseData, let responseState):
             CardResponseView(
                 responseText: Binding(
-                    get: { responseCard.text },
+                    get: { responseData.text },
                     set: { newValue in
-                        var updatedResponseCard = responseCard
-                        updatedResponseCard.text = newValue
-                        let updatedCard = Card.response(updatedResponseCard)
+                        var updatedResponseData = responseData
+                        updatedResponseData.text = newValue
+                        let updatedCard = CardViewState.response(updatedResponseData, responseState)
                         coordinator.updateCard(updatedCard, in: stack.id)
                     }
                 ),
-                generationTime: responseCard.generationTime,
+                generationTime: responseData.generationTime,
                 onDelete: {
                     coordinator.removeCard(withId: card.id, from: stack.id)
                 }
@@ -173,7 +173,7 @@ struct CardStackView: View {
         }
     }
     
-    private func cardDragGesture(for card: Card) -> some Gesture {
+    private func cardDragGesture(for card: CardViewState) -> some Gesture {
         DragGesture()
             .onChanged { value in
                 // Spread out the stack when starting to drag
@@ -205,7 +205,7 @@ struct CardStackView: View {
             }
     }
     
-    private func findCardAtPosition(_ position: CGPoint, excluding excludedId: UUID) -> Card? {
+    private func findCardAtPosition(_ position: CGPoint, excluding excludedId: UUID) -> CardViewState? {
         // Find the card at the given position, excluding the dragged card
         for card in stack.cards {
             if card.id != excludedId {
@@ -223,7 +223,7 @@ struct CardStackView: View {
         return nil
     }
     
-    private func reorderCard(_ draggedCard: Card, to targetCard: Card) {
+    private func reorderCard(_ draggedCard: CardViewState, to targetCard: CardViewState) {
         guard let draggedIndex = stack.cards.firstIndex(where: { $0.id == draggedCard.id }),
               let targetIndex = stack.cards.firstIndex(where: { $0.id == targetCard.id }) else { return }
         
@@ -236,7 +236,7 @@ struct CardStackView: View {
         return stack.promptCards.count
     }
     
-    private func getOriginalCardPosition(for card: Card) -> CGPoint {
+    private func getOriginalCardPosition(for card: CardViewState) -> CGPoint {
         // Calculate where this card should be in its original position
         guard let cardIndex = stack.cards.firstIndex(where: { $0.id == card.id }) else {
             return card.position
@@ -288,7 +288,7 @@ struct CardStackView: View {
         coordinator.updateCard(updatedCard, in: stack.id)
     }
     
-    private func getStackRotation(for card: Card) -> Double {
+    private func getStackRotation(for card: CardViewState) -> Double {
         guard let cardIndex = stack.cards.firstIndex(where: { $0.id == card.id }) else { return 0 }
         
         // Create a slight rotation for each card in the stack
@@ -302,7 +302,7 @@ struct CardStackView: View {
         return (baseRotation + randomOffset) * direction
     }
     
-    private func getInitialAnimationOffset(for card: Card, screenSize: CGSize) -> CGFloat {
+    private func getInitialAnimationOffset(for card: CardViewState, screenSize: CGSize) -> CGFloat {
         // Calculate offset from screen top center to card's final position
         // This ensures cards animate from the true top center of the screen
         let screenTopCenter = CGPoint(x: screenSize.width / 2, y: 0)

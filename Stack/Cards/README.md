@@ -10,7 +10,7 @@ The Stack app now uses a centralized, composable card design system that makes i
 All shared design values are now stored in `CardConfig`:
 - **Card Sizes**: Increased from 260×180 to 300×200 (prompt/response), 300×160 (LLM)
 - **Design Elements**: Corner radius, shadows, borders, padding, typography
-- **Color System**: Centralized hue calculations for prompt card variations
+- **Color System**: Centralized hue calculations for prompt card colors
 
 ### ✅ Composable Architecture
 - `CardStyle` struct defines all visual properties
@@ -57,7 +57,7 @@ private var cardStyle: CardStyle {
 }
 ```
 
-### Theme Variations
+### Theme Options
 ```swift
 // Dark theme
 CardStyle.darkPrompt(hue: Double(colorIndex))

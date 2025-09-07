@@ -133,8 +133,9 @@ struct ContentView: View {
                     // Add new stack button
                     Button(action: {
                         // Add new stack at center of screen
-                        let screenSize = coordinator.currentScreenSize
-                        coordinator.addNewStack(at: CGPoint(x: screenSize.width/2, y: screenSize.height/2-80.0))
+                        //let screenSize = coordinator.currentScreenSize
+                        //coordinator.addNewStack(at: CGPoint(x: screenSize.width/2, y: screenSize.height/2-80.0))
+                        print("Compare")
                     }) {
                         HStack(spacing: 6) {
                             Image(systemName: "plus.circle.fill")

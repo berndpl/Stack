@@ -20,8 +20,6 @@ I can add multiple PromptCards to section the prompt.
 
 I can also quickly mute a PromptCard to remove it from the compiled prompt without deleting the content. This helps me to quickly A/B test.
 
-I can also add a PrompCard Variation to each PrompCard. Will cause the Stack run separatly for a testing the impact of this PromptCard
-
 Card Behaviour
 
 Cards appear as a stack. Each card has a slight offset so you can see its header. 
@@ -32,7 +30,6 @@ Interface
 
 PrompCard
 - Mute button
-- Variation button
 - Textview
 - Add to sequence button
 

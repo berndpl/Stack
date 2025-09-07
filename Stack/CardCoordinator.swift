@@ -52,11 +52,9 @@ final class CardCoordinator: ObservableObject {
         
         // Create new prompt card with temporary position and correct color index
         let centerX = currentScreenSize.width / 2
-        let newPromptCard = PromptCard(
-            position: CGPoint(x: centerX, y: 0),
-            colorIndex: promptCards.count
-        )
-        let newPrompt = Card.prompt(newPromptCard)
+        let newPromptData = CardPrompt(colorIndex: promptCards.count)
+        let newPromptState = ViewState(position: CGPoint(x: centerX, y: 0))
+        let newPrompt = CardViewState.prompt(newPromptData, newPromptState)
         
         // Insert the new card
         stacks[stackIndex].cards.insert(newPrompt, at: insertIndex)
@@ -65,7 +63,7 @@ final class CardCoordinator: ObservableObject {
         updateCardPositions(in: stackId, screenSize: currentScreenSize)
     }
     
-    func updateCard(_ card: Card, in stackId: UUID) {
+    func updateCard(_ card: CardViewState, in stackId: UUID) {
         guard let stackIndex = stacks.firstIndex(where: { $0.id == stackId }),
               let cardIndex = stacks[stackIndex].cards.firstIndex(where: { $0.id == card.id }) else { return }
         
@@ -364,12 +362,12 @@ final class CardCoordinator: ObservableObject {
         
         // Find LLM card
         guard let card = stacks[stackIndex].cards.first(where: { $0.type == .llm }),
-              case .llm(let llmCard) = card else {
+              let llmData = card.llmData else {
             return
         }
         
-        let host = llmCard.host
-        let model = llmCard.model
+        let host = llmData.host
+        let model = llmData.model
         let prompt = compilePrompts(for: stackId)
         
         print("🚀 Starting generation...")
@@ -424,45 +422,43 @@ final class CardCoordinator: ObservableObject {
                 // After animation completes, update the text and animate back in
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                        if case .response(var responseCard) = self.stacks[stackIndex].cards[existingIndex] {
-                            responseCard.text = initialText
-                            responseCard.generationTime = generationTime
-                            responseCard.isAnimatingOut = false
-                            responseCard.isAnimatingIn = true
-                            self.stacks[stackIndex].cards[existingIndex] = .response(responseCard)
+                        if case .response(var responseData, var responseState) = self.stacks[stackIndex].cards[existingIndex] {
+                            responseData.text = initialText
+                            responseData.generationTime = generationTime
+                            responseState.isAnimatingOut = false
+                            responseState.isAnimatingIn = true
+                            self.stacks[stackIndex].cards[existingIndex] = .response(responseData, responseState)
                         }
                     }
                     
                     // Stop animating in after animation completes
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                         withAnimation(.easeOut(duration: 0.2)) {
-                            if case .response(var responseCard) = self.stacks[stackIndex].cards[existingIndex] {
-                                responseCard.isAnimatingIn = false
-                                self.stacks[stackIndex].cards[existingIndex] = .response(responseCard)
+                            if case .response(var responseData, var responseState) = self.stacks[stackIndex].cards[existingIndex] {
+                                responseState.isAnimatingIn = false
+                                self.stacks[stackIndex].cards[existingIndex] = .response(responseData, responseState)
                             }
                         }
                     }
                 }
             } else {
                 // Just update the text without animation
-                if case .response(var responseCard) = stacks[stackIndex].cards[existingIndex] {
-                    responseCard.text = initialText
-                    responseCard.generationTime = generationTime
-                    stacks[stackIndex].cards[existingIndex] = .response(responseCard)
+                if case .response(var responseData, let responseState) = stacks[stackIndex].cards[existingIndex] {
+                    responseData.text = initialText
+                    responseData.generationTime = generationTime
+                    stacks[stackIndex].cards[existingIndex] = .response(responseData, responseState)
                 }
             }
             return existingIndex
         }
         
         // Create new response card
-        var newResponseCard = ResponseCard(
-            position: .zero, // Position will be set by updateCardPositions
-            text: initialText
-        )
-        newResponseCard.generationTime = generationTime
-        newResponseCard.isInitialAppearance = false // Response cards don't get initial falling animation
+        var newResponseData = CardResponse(text: initialText)
+        newResponseData.generationTime = generationTime
+        var newResponseState = ViewState(position: .zero) // Position will be set by updateCardPositions
+        newResponseState.isInitialAppearance = false // Response cards don't get initial falling animation
         
-        stacks[stackIndex].cards.append(.response(newResponseCard))
+        stacks[stackIndex].cards.append(.response(newResponseData, newResponseState))
         let newIndex = stacks[stackIndex].cards.count - 1
         
         // Only animate if we have content and should animate
@@ -544,34 +540,12 @@ final class CardCoordinator: ObservableObject {
     func togglePromptCardMute(_ cardId: UUID, in stackId: UUID) {
         guard let stackIndex = stacks.firstIndex(where: { $0.id == stackId }),
               let cardIndex = stacks[stackIndex].cards.firstIndex(where: { $0.id == cardId }),
-              case .prompt(var promptCard) = stacks[stackIndex].cards[cardIndex] else { return }
+              case .prompt(var promptData, let promptState) = stacks[stackIndex].cards[cardIndex] else { return }
         
-        promptCard.isMuted.toggle()
-        stacks[stackIndex].cards[cardIndex] = .prompt(promptCard)
+        promptData.isMuted.toggle()
+        stacks[stackIndex].cards[cardIndex] = .prompt(promptData, promptState)
     }
     
-    /// Toggles the variation state of a prompt card
-    func togglePromptCardVariation(_ cardId: UUID, in stackId: UUID) {
-        guard let stackIndex = stacks.firstIndex(where: { $0.id == stackId }),
-              let cardIndex = stacks[stackIndex].cards.firstIndex(where: { $0.id == cardId }),
-              case .prompt(var promptCard) = stacks[stackIndex].cards[cardIndex] else { return }
-        
-        promptCard.hasVariation.toggle()
-        if promptCard.hasVariation && promptCard.variationText == nil {
-            promptCard.variationText = promptCard.text // Initialize with current text
-        }
-        stacks[stackIndex].cards[cardIndex] = .prompt(promptCard)
-    }
-    
-    /// Updates the variation text of a prompt card
-    func updatePromptCardVariationText(_ cardId: UUID, text: String, in stackId: UUID) {
-        guard let stackIndex = stacks.firstIndex(where: { $0.id == stackId }),
-              let cardIndex = stacks[stackIndex].cards.firstIndex(where: { $0.id == cardId }),
-              case .prompt(var promptCard) = stacks[stackIndex].cards[cardIndex] else { return }
-        
-        promptCard.variationText = text
-        stacks[stackIndex].cards[cardIndex] = .prompt(promptCard)
-    }
     
     /// Creates a comparison stack linked to the specified stack
     func createComparisonStack(for stackId: UUID) {
